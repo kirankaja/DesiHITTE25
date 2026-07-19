@@ -5,6 +5,12 @@ import SwiftData
 struct DesiHITTE25App: App {
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
 
+    // Shared long-lived services. Hoisted here so state (paired BLE device,
+    // voice-coach settings, YouTube player) survives the onboarding→main transition.
+    @StateObject private var bluetoothManager = BluetoothManager()
+    @StateObject private var voiceCoach = VoiceCoach()
+    @StateObject private var youtubeManager = YouTubePlayerManager()
+
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             WorkoutSession.self,
@@ -21,9 +27,13 @@ struct DesiHITTE25App: App {
     var body: some Scene {
         WindowGroup {
             if hasCompletedOnboarding {
-                ContentView()
+                ContentView(
+                    bluetoothManager: bluetoothManager,
+                    voiceCoach: voiceCoach,
+                    youtubeManager: youtubeManager
+                )
             } else {
-                OnboardingView {
+                OnboardingView(bluetoothManager: bluetoothManager) {
                     withAnimation {
                         hasCompletedOnboarding = true
                     }

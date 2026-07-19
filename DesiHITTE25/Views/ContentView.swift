@@ -6,50 +6,54 @@ struct ContentView: View {
     @Query(sort: \WorkoutSession.startDate, order: .reverse) private var sessions: [WorkoutSession]
     @Query private var profiles: [UserProfile]
 
-    @StateObject private var bluetoothManager = BluetoothManager()
-    @StateObject private var voiceCoach = VoiceCoach()
-    @StateObject private var youtubeManager = YouTubePlayerManager()
+    @ObservedObject var bluetoothManager: BluetoothManager
+    @ObservedObject var voiceCoach: VoiceCoach
+    @ObservedObject var youtubeManager: YouTubePlayerManager
 
     @State private var selectedTab = 0
 
-    private var userProfile: UserProfile {
-        profiles.first ?? UserProfile()
-    }
-
     var body: some View {
-        TabView(selection: $selectedTab) {
-            WorkoutTabView(
-                bluetoothManager: bluetoothManager,
-                voiceCoach: voiceCoach,
-                youtubeManager: youtubeManager,
-                userProfile: userProfile
-            )
-            .tabItem {
-                Label("Workout", systemImage: "flame.fill")
-            }
-            .tag(0)
+        Group {
+            // Ensure a persistent UserProfile exists before rendering tabs.
+            // Passing a transient `UserProfile()` into @Bindable views produces
+            // silently-dropped edits, so we guarantee the SwiftData-managed
+            // instance is present first.
+            if let profile = profiles.first {
+                TabView(selection: $selectedTab) {
+                    WorkoutTabView(
+                        bluetoothManager: bluetoothManager,
+                        voiceCoach: voiceCoach,
+                        youtubeManager: youtubeManager,
+                        userProfile: profile
+                    )
+                    .tabItem {
+                        Label("Workout", systemImage: "flame.fill")
+                    }
+                    .tag(0)
 
-            HistoryView(sessions: sessions)
-                .tabItem {
-                    Label("History", systemImage: "clock.fill")
+                    HistoryView(sessions: sessions)
+                        .tabItem {
+                            Label("History", systemImage: "clock.fill")
+                        }
+                        .tag(1)
+
+                    SettingsView(
+                        bluetoothManager: bluetoothManager,
+                        voiceCoach: voiceCoach,
+                        userProfile: profile
+                    )
+                    .tabItem {
+                        Label("Settings", systemImage: "gearshape.fill")
+                    }
+                    .tag(2)
                 }
-                .tag(1)
-
-            SettingsView(
-                bluetoothManager: bluetoothManager,
-                voiceCoach: voiceCoach,
-                userProfile: userProfile
-            )
-            .tabItem {
-                Label("Settings", systemImage: "gearshape.fill")
-            }
-            .tag(2)
-        }
-        .tint(.orange)
-        .onAppear {
-            if profiles.isEmpty {
-                let profile = UserProfile()
-                modelContext.insert(profile)
+                .tint(.orange)
+            } else {
+                ProgressView()
+                    .onAppear {
+                        modelContext.insert(UserProfile())
+                        try? modelContext.save()
+                    }
             }
         }
     }

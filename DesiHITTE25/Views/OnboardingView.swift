@@ -9,7 +9,7 @@ struct OnboardingView: View {
     @State private var age: String = "30"
     @State private var fitnessLevel: String = "intermediate"
 
-    @StateObject private var bluetoothManager = BluetoothManager()
+    @ObservedObject var bluetoothManager: BluetoothManager
 
     var onComplete: () -> Void
 
