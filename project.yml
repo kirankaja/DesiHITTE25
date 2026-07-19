@@ -29,11 +29,7 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         GENERATE_INFOPLIST_FILE: "NO"
     dependencies:
-      - framework: CoreBluetooth.framework
-        implicit: true
-      - framework: AVFoundation.framework
-        implicit: true
-      - framework: WebKit.framework
-        implicit: true
-      - framework: SwiftData.framework
-        implicit: true
+      - sdk: CoreBluetooth.framework
+      - sdk: AVFoundation.framework
+      - sdk: WebKit.framework
+      - sdk: SwiftData.framework
