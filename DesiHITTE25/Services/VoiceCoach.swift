@@ -85,15 +85,11 @@ class VoiceCoach: ObservableObject {
         utterance.volume = coachVolume
         utterance.pitchMultiplier = 1.05
 
-        // Detect Hindi words to choose voice
-        if containsHindi(text) {
-            utterance.voice = AVSpeechSynthesisVoice(language: "hi-IN")
-        } else {
-            utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
-        }
-
-        // Use English voice for mixed content (most messages)
-        utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
+        // Mixed English/Hindi content — the en-IN voice handles Hindi loanwords
+        // ("Chalo", "Bahut acche", "Shandar") more naturally than en-US and keeps
+        // English words intelligible, unlike hi-IN which mangles English.
+        utterance.voice = AVSpeechSynthesisVoice(language: "en-IN")
+            ?? AVSpeechSynthesisVoice(language: "en-US")
 
         isSpeaking = true
         synthesizer.speak(utterance)
