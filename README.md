@@ -51,6 +51,7 @@ DesiHITTE25 is an iOS app that brings the Orangetheory Fitness experience home �
 - **Xcode 15+** (Swift 5.9+)
 - **iOS 17.0+** deployment target
 - macOS Sonoma or later
+- **XcodeGen** (`brew install xcodegen`)
 
 ### Getting Started
 
@@ -60,18 +61,17 @@ DesiHITTE25 is an iOS app that brings the Orangetheory Fitness experience home �
    cd DesiHITTE25
    ```
 
-2. **Create Xcode Project**
-   - Open Xcode → File → New → Project
-   - Choose **iOS → App**
-   - Product Name: `DesiHITTE25`
-   - Interface: **SwiftUI**
-   - Storage: **SwiftData**
-   - Bundle Identifier: `com.yourname.DesiHITTE25`
+2. **Generate Xcode Project** (using XcodeGen)
+   ```bash
+   brew install xcodegen   # if not already installed
+   xcodegen generate
+   ```
+   This reads `project.yml` and generates `DesiHITTE25.xcodeproj` with all source files, frameworks, and build settings pre-configured.
 
-3. **Add Source Files**
-   - Drag all `.swift` files from the `DesiHITTE25/` folder into the Xcode project
-   - Ensure "Copy items if needed" is checked
-   - Replace the generated `Info.plist` with the provided one
+3. **Open in Xcode**
+   ```bash
+   open DesiHITTE25.xcodeproj
+   ```
 
 4. **Configure Signing**
    - Select the project in Xcode
@@ -85,6 +85,8 @@ DesiHITTE25 is an iOS app that brings the Orangetheory Fitness experience home �
    - Select your iPhone or Simulator
    - Press `Cmd + R` to build and run
    - In Simulator, mock BLE data is automatically used
+
+> **Note:** The `.xcodeproj` is not checked into git — it's generated from `project.yml` via XcodeGen. CI also uses this approach (see `.github/workflows/build.yml`).
 
 ## 🏗️ Architecture
 
