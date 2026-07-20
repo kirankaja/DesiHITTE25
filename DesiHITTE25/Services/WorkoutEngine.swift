@@ -71,8 +71,10 @@ class WorkoutEngine: ObservableObject {
 
         if newZone != lastZone && isWorkoutActive {
             voiceCoach.announceZoneChange(to: newZone)
-            let category = BollywoodPlaylist.category(for: newZone)
-            youtubeManager.switchPlaylist(to: category)
+            // NOTE: music playlist is NOT switched here — it's driven by the
+            // interval's *target* zone (see advanceToInterval) so songs are
+            // chosen to help the user climb toward the expected intensity,
+            // not chase whatever their body is currently doing.
             lastZone = newZone
         }
 
@@ -109,7 +111,8 @@ class WorkoutEngine: ObservableObject {
         startTimer()
 
         voiceCoach.announce("Chalo! Let's begin! \(template.name) workout starting now!")
-        youtubeManager.switchPlaylist(to: .moderate)
+        // Playlist was already set by advanceToInterval(0) based on the first
+        // interval's targetZone — just start playing.
         youtubeManager.play()
     }
 
@@ -254,6 +257,14 @@ class WorkoutEngine: ObservableObject {
 
         voiceCoach.announceIntervalChange(interval)
         updateResistanceSuggestion()
+
+        // Prescriptive music: pick playlist for the intensity the interval
+        // is asking for, not the user's current HR. This helps push the HR
+        // toward the target instead of trailing behind it.
+        if isWorkoutActive {
+            let category = BollywoodPlaylist.category(for: interval.targetZone)
+            youtubeManager.switchPlaylist(to: category)
+        }
     }
 
     private func advanceToNextInterval() {
