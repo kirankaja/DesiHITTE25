@@ -201,4 +201,36 @@ enum MusicLibrary {
         case (.pop,       .coolDown):   return popCoolDown
         }
     }
+
+    /// Pre-plan one track per interval. Each interval is assigned the track
+    /// whose BPM is closest to the middle of its category's BPM range, while
+    /// avoiding immediate repeats and preferring tracks not yet used earlier
+    /// in the session. Falls back to any repeat only if a category has fewer
+    /// tracks than uses.
+    static func planSession(categories: [PlaylistCategory], genre: MusicGenre) -> [MusicTrack] {
+        var used: Set<String> = []
+        var lastVideoID: String?
+        var plan: [MusicTrack] = []
+
+        for category in categories {
+            let tracks = playlist(genre: genre, category: category).tracks
+            guard !tracks.isEmpty else { continue }
+
+            let target = (category.bpmRange.lowerBound + category.bpmRange.upperBound) / 2
+
+            // Prefer unused tracks. If all used, allow reuse but never the
+            // most-recent one back-to-back.
+            let unused = tracks.filter { !used.contains($0.videoID) && $0.videoID != lastVideoID }
+            let pool = !unused.isEmpty
+                ? unused
+                : tracks.filter { $0.videoID != lastVideoID }
+            let fallback = pool.isEmpty ? tracks : pool
+
+            let pick = fallback.min(by: { abs($0.bpm - target) < abs($1.bpm - target) }) ?? fallback[0]
+            plan.append(pick)
+            used.insert(pick.videoID)
+            lastVideoID = pick.videoID
+        }
+        return plan
+    }
 }

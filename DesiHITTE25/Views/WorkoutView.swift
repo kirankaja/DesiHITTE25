@@ -65,6 +65,24 @@ struct WorkoutView: View {
                     .padding(.horizontal)
                     .padding(.top, 8)
 
+                if let track = youtubeManager.currentTrack {
+                    HStack(spacing: 8) {
+                        Image(systemName: "music.quarternote.3")
+                            .font(.caption)
+                            .foregroundColor(.orange)
+                        Text(track.title)
+                            .font(.caption)
+                            .foregroundColor(.white)
+                            .lineLimit(1)
+                        Text("· \(track.bpm) BPM")
+                            .font(.caption.monospacedDigit())
+                            .foregroundColor(.white.opacity(0.7))
+                        Spacer()
+                    }
+                    .padding(.horizontal)
+                    .padding(.top, 4)
+                }
+
                 intervalInfo
                     .padding(.horizontal)
                     .padding(.top, 8)
@@ -285,17 +303,18 @@ struct WorkoutView: View {
                     .clipShape(Circle())
             }
 
-            // Music Next
+            // Skip song (finds a similar-BPM track in the current playlist)
             Button {
-                youtubeManager.next()
+                workoutEngine.skipSong()
             } label: {
-                Image(systemName: "music.note")
+                Image(systemName: "forward.fill")
                     .font(.title3)
                     .foregroundColor(.white)
                     .frame(width: 44, height: 44)
                     .background(Color.white.opacity(0.15))
                     .clipShape(Circle())
             }
+            .accessibilityLabel("Skip song, similar BPM")
 
             // End Workout
             Button {

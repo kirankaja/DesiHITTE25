@@ -107,6 +107,14 @@ class WorkoutEngine: ObservableObject {
         #endif
 
         isWorkoutActive = true
+
+        // Pre-plan the entire session's music: one track per interval, each
+        // chosen by BPM proximity to the interval's target category. Uses the
+        // player's currently-selected genre so a mid-workout genre swap can
+        // re-plan cleanly.
+        let categories = template.intervals.map { MusicPlaylist.category(for: $0.targetZone) }
+        youtubeManager.planSession(categories: categories, genre: youtubeManager.currentGenre)
+
         advanceToInterval(index: 0)
         startTimer()
 
@@ -258,13 +266,20 @@ class WorkoutEngine: ObservableObject {
         voiceCoach.announceIntervalChange(interval)
         updateResistanceSuggestion()
 
-        // Prescriptive music: pick playlist for the intensity the interval
-        // is asking for, not the user's current HR. This helps push the HR
-        // toward the target instead of trailing behind it.
+        // Prescriptive music: play the pre-planned track for this interval,
+        // chosen at session start by BPM proximity to the interval's target
+        // category. Falls back to a plain playlist swap if no plan exists
+        // (e.g. workout started with an empty template).
         if isWorkoutActive {
             let category = MusicPlaylist.category(for: interval.targetZone)
-            youtubeManager.switchPlaylist(to: category)
+            youtubeManager.playPlannedTrack(at: index, fallbackCategory: category)
         }
+    }
+
+    /// Skip to another track in the current playlist whose BPM is closest to
+    /// the currently-playing one. Called by the UI Skip button.
+    func skipSong() {
+        youtubeManager.skipToSimilarBPM()
     }
 
     private func advanceToNextInterval() {
@@ -284,6 +299,7 @@ class WorkoutEngine: ObservableObject {
 
         voiceCoach.announce("Bahut acche! Workout complete! You earned \(splatPoints) splat points today! Great job!")
         youtubeManager.pause()
+        youtubeManager.clearSessionPlan()
     }
 
     private func updateResistanceSuggestion() {
