@@ -9,6 +9,7 @@ struct ContentView: View {
     @ObservedObject var bluetoothManager: BluetoothManager
     @ObservedObject var voiceCoach: VoiceCoach
     @ObservedObject var youtubeManager: YouTubePlayerManager
+    @ObservedObject var hrRouter: HeartRateRouter
 
     @State private var selectedTab = 0
 
@@ -24,6 +25,7 @@ struct ContentView: View {
                         bluetoothManager: bluetoothManager,
                         voiceCoach: voiceCoach,
                         youtubeManager: youtubeManager,
+                        hrRouter: hrRouter,
                         userProfile: profile
                     )
                     .tabItem {
@@ -40,6 +42,7 @@ struct ContentView: View {
                     SettingsView(
                         bluetoothManager: bluetoothManager,
                         voiceCoach: voiceCoach,
+                        hrRouter: hrRouter,
                         userProfile: profile
                     )
                     .tabItem {
@@ -48,6 +51,17 @@ struct ContentView: View {
                     .tag(2)
                 }
                 .tint(.orange)
+                .onAppear {
+                    // Sync router with the persisted user preference the first
+                    // time this view appears, and activate the current source.
+                    hrRouter.select(profile.preferredHRSource)
+                    hrRouter.activateCurrent()
+                }
+                .onChange(of: profile.preferredHRSourceRaw) { _, newRaw in
+                    if let kind = HeartRateSourceKind(rawValue: newRaw) {
+                        hrRouter.select(kind)
+                    }
+                }
             } else {
                 ProgressView()
                     .onAppear {
@@ -65,6 +79,7 @@ struct WorkoutTabView: View {
     @ObservedObject var bluetoothManager: BluetoothManager
     @ObservedObject var voiceCoach: VoiceCoach
     @ObservedObject var youtubeManager: YouTubePlayerManager
+    @ObservedObject var hrRouter: HeartRateRouter
     var userProfile: UserProfile
 
     @State private var selectedTemplate: WorkoutTemplate?
@@ -89,6 +104,7 @@ struct WorkoutTabView: View {
                         bluetoothManager: bluetoothManager,
                         voiceCoach: voiceCoach,
                         youtubeManager: youtubeManager,
+                        hrRouter: hrRouter,
                         maxHR: userProfile.maxHR,
                         motivationFrequency: userProfile.motivationFrequency
                     )

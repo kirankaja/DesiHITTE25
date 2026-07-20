@@ -9,6 +9,7 @@ struct WorkoutView: View {
     @ObservedObject var bluetoothManager: BluetoothManager
     @ObservedObject var voiceCoach: VoiceCoach
     @ObservedObject var youtubeManager: YouTubePlayerManager
+    @ObservedObject var hrRouter: HeartRateRouter
     let maxHR: Int
     let motivationFrequency: TimeInterval
 
@@ -22,16 +23,18 @@ struct WorkoutView: View {
          bluetoothManager: BluetoothManager,
          voiceCoach: VoiceCoach,
          youtubeManager: YouTubePlayerManager,
+         hrRouter: HeartRateRouter,
          maxHR: Int,
          motivationFrequency: TimeInterval) {
         self.template = template
         self.bluetoothManager = bluetoothManager
         self.voiceCoach = voiceCoach
         self.youtubeManager = youtubeManager
+        self.hrRouter = hrRouter
         self.maxHR = maxHR
         self.motivationFrequency = motivationFrequency
         _workoutEngine = StateObject(wrappedValue: WorkoutEngine(
-            bluetoothManager: bluetoothManager,
+            heartRateRouter: hrRouter,
             voiceCoach: voiceCoach,
             youtubeManager: youtubeManager
         ))
@@ -46,7 +49,7 @@ struct WorkoutView: View {
             VStack(spacing: 0) {
                 ZoneBarView(
                     currentZone: workoutEngine.currentZone,
-                    heartRate: bluetoothManager.heartRate,
+                    heartRate: hrRouter.heartRate,
                     maxHR: maxHR
                 )
                 .padding(.horizontal)
@@ -116,7 +119,7 @@ struct WorkoutView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "heart.fill")
                         .foregroundColor(workoutEngine.currentZone.color)
-                    Text("\(bluetoothManager.heartRate)")
+                    Text("\(hrRouter.heartRate)")
                         .font(.system(size: 36, weight: .bold, design: .rounded))
                         .foregroundColor(workoutEngine.currentZone.color)
                 }

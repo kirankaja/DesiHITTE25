@@ -33,3 +33,4 @@ targets:
       - sdk: AVFoundation.framework
       - sdk: WebKit.framework
       - sdk: SwiftData.framework
+      - sdk: HealthKit.framework

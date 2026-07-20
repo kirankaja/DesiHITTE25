@@ -7,9 +7,20 @@ struct DesiHITTE25App: App {
 
     // Shared long-lived services. Hoisted here so state (paired BLE device,
     // voice-coach settings, YouTube player) survives the onboarding→main transition.
-    @StateObject private var bluetoothManager = BluetoothManager()
+    @StateObject private var bluetoothManager: BluetoothManager
     @StateObject private var voiceCoach = VoiceCoach()
     @StateObject private var youtubeManager = YouTubePlayerManager()
+
+    // HR router owns every HR source (BLE / HealthKit / Watch stub) and
+    // publishes the currently-selected source's readings. WorkoutEngine now
+    // subscribes to the router instead of the BluetoothManager directly.
+    @StateObject private var hrRouter: HeartRateRouter
+
+    init() {
+        let bt = BluetoothManager()
+        _bluetoothManager = StateObject(wrappedValue: bt)
+        _hrRouter = StateObject(wrappedValue: HeartRateRouter(bluetooth: bt))
+    }
 
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
@@ -30,7 +41,8 @@ struct DesiHITTE25App: App {
                 ContentView(
                     bluetoothManager: bluetoothManager,
                     voiceCoach: voiceCoach,
-                    youtubeManager: youtubeManager
+                    youtubeManager: youtubeManager,
+                    hrRouter: hrRouter
                 )
             } else {
                 OnboardingView(bluetoothManager: bluetoothManager) {

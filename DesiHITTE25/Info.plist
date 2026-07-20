@@ -6,6 +6,10 @@
     <string>DesiHITTE25 uses Bluetooth to connect to your Sole E25 elliptical and heart rate monitor for real-time workout tracking.</string>
     <key>NSBluetoothPeripheralUsageDescription</key>
     <string>DesiHITTE25 connects to your fitness equipment via Bluetooth to read heart rate, speed, cadence, and control resistance.</string>
+    <key>NSHealthShareUsageDescription</key>
+    <string>DesiHITTE25 reads your heart rate from Apple Health (via Apple Watch) to score your workout zones and splat points.</string>
+    <key>NSHealthUpdateUsageDescription</key>
+    <string>DesiHITTE25 does not currently write to Apple Health; this permission is reserved for a future feature.</string>
     <key>UIBackgroundModes</key>
     <array>
         <string>bluetooth-central</string>
