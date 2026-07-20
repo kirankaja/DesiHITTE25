@@ -56,10 +56,16 @@ struct ContentView: View {
                     // time this view appears, and activate the current source.
                     hrRouter.select(profile.preferredHRSource)
                     hrRouter.activateCurrent()
+                    youtubeManager.setGenre(profile.preferredMusicGenre)
                 }
                 .onChange(of: profile.preferredHRSourceRaw) { _, newRaw in
                     if let kind = HeartRateSourceKind(rawValue: newRaw) {
                         hrRouter.select(kind)
+                    }
+                }
+                .onChange(of: profile.preferredMusicGenreRaw) { _, newRaw in
+                    if let genre = MusicGenre(rawValue: newRaw) {
+                        youtubeManager.setGenre(genre)
                     }
                 }
             } else {

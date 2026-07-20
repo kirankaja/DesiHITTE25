@@ -92,6 +92,7 @@ final class UserProfile {
     var motivationFrequency: TimeInterval
     var hasCompletedOnboarding: Bool
     var preferredHRSourceRaw: String
+    var preferredMusicGenreRaw: String
 
     init(
         age: Int = 30,
@@ -100,7 +101,8 @@ final class UserProfile {
         coachVolume: Float = 0.8,
         motivationFrequency: TimeInterval = 35,
         hasCompletedOnboarding: Bool = false,
-        preferredHRSourceRaw: String = HeartRateSourceKind.bluetoothFTMS.rawValue
+        preferredHRSourceRaw: String = HeartRateSourceKind.bluetoothFTMS.rawValue,
+        preferredMusicGenreRaw: String = MusicGenre.bollywood.rawValue
     ) {
         self.id = UUID()
         self.age = age
@@ -110,6 +112,7 @@ final class UserProfile {
         self.motivationFrequency = motivationFrequency
         self.hasCompletedOnboarding = hasCompletedOnboarding
         self.preferredHRSourceRaw = preferredHRSourceRaw
+        self.preferredMusicGenreRaw = preferredMusicGenreRaw
     }
 
     var maxHR: Int {
@@ -119,5 +122,10 @@ final class UserProfile {
     var preferredHRSource: HeartRateSourceKind {
         get { HeartRateSourceKind(rawValue: preferredHRSourceRaw) ?? .bluetoothFTMS }
         set { preferredHRSourceRaw = newValue.rawValue }
+    }
+
+    var preferredMusicGenre: MusicGenre {
+        get { MusicGenre(rawValue: preferredMusicGenreRaw) ?? .bollywood }
+        set { preferredMusicGenreRaw = newValue.rawValue }
     }
 }

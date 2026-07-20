@@ -10,12 +10,13 @@ class YouTubePlayerManager: ObservableObject {
 
     // MARK: - Private
     private var currentCategory: PlaylistCategory = .moderate
+    private(set) var currentGenre: MusicGenre = .bollywood
     private var currentPlaylist: [String] = []
     private var currentVideoIndex: Int = 0
     weak var webView: WKWebView?
 
     init() {
-        currentPlaylist = BollywoodPlaylist.playlist(for: .moderate).videoIDs
+        currentPlaylist = MusicLibrary.playlist(genre: currentGenre, category: .moderate).videoIDs
     }
 
     // MARK: - Player HTML
@@ -137,9 +138,21 @@ class YouTubePlayerManager: ObservableObject {
     }
 
     func switchPlaylist(to category: PlaylistCategory) {
-        guard category != currentCategory else { return }
+        applyPlaylist(category: category, genre: currentGenre)
+    }
+
+    /// Change genre. If a workout is running, this immediately reloads the
+    /// current category in the new genre so the switch is audible right away.
+    func setGenre(_ genre: MusicGenre) {
+        guard genre != currentGenre else { return }
+        applyPlaylist(category: currentCategory, genre: genre, force: true)
+    }
+
+    private func applyPlaylist(category: PlaylistCategory, genre: MusicGenre, force: Bool = false) {
+        if !force, category == currentCategory, genre == currentGenre { return }
         currentCategory = category
-        let playlist = BollywoodPlaylist.playlist(for: category)
+        currentGenre = genre
+        let playlist = MusicLibrary.playlist(genre: genre, category: category)
         currentPlaylist = playlist.videoIDs
         currentVideoIndex = 0
         let idsString = currentPlaylist.joined(separator: ",")

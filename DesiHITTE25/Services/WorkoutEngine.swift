@@ -262,7 +262,7 @@ class WorkoutEngine: ObservableObject {
         // is asking for, not the user's current HR. This helps push the HR
         // toward the target instead of trailing behind it.
         if isWorkoutActive {
-            let category = BollywoodPlaylist.category(for: interval.targetZone)
+            let category = MusicPlaylist.category(for: interval.targetZone)
             youtubeManager.switchPlaylist(to: category)
         }
     }

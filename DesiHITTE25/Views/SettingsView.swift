@@ -126,6 +126,25 @@ struct SettingsView: View {
                     Text("Choose where DesiHITTE25 reads your heart rate from. Apple Watch (via Health) needs a workout running on the Watch for continuous readings. A dedicated Watch app for live streaming is coming in a future update.")
                 }
 
+                // Music Genre
+                Section {
+                    Picker("Genre", selection: $userProfile.preferredMusicGenreRaw) {
+                        ForEach(MusicGenre.allCases) { genre in
+                            Text(genre.displayName).tag(genre.rawValue)
+                        }
+                    }
+                    .pickerStyle(.inline)
+                    .labelsHidden()
+
+                    Text(userProfile.preferredMusicGenre.subtitle)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                } header: {
+                    Text("Music")
+                } footer: {
+                    Text("Playlists are curated by intensity and matched to each interval's target zone (not your current heart rate) — so the music helps push you toward the target. Songs are tagged with approximate BPM: 60–95 for cool-down, 95–125 for moderate, 125+ for high energy. Switch genre anytime, even mid-workout.")
+                }
+
                 // Bluetooth Device
                 Section("Bluetooth Device") {
                     HStack {
