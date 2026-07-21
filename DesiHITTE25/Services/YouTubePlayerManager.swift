@@ -2,7 +2,7 @@ import Foundation
 import Combine
 import WebKit
 
-class YouTubePlayerManager: ObservableObject {
+class YouTubePlayerManager: ObservableObject, MusicController {
     // MARK: - Published Properties
     @Published var isPlaying = false
     @Published var currentVideoTitle = ""

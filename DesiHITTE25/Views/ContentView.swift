@@ -8,7 +8,7 @@ struct ContentView: View {
 
     @ObservedObject var bluetoothManager: BluetoothManager
     @ObservedObject var voiceCoach: VoiceCoach
-    @ObservedObject var youtubeManager: YouTubePlayerManager
+    @ObservedObject var musicRouter: MusicRouter
     @ObservedObject var hrRouter: HeartRateRouter
 
     @State private var selectedTab = 0
@@ -24,7 +24,7 @@ struct ContentView: View {
                     WorkoutTabView(
                         bluetoothManager: bluetoothManager,
                         voiceCoach: voiceCoach,
-                        youtubeManager: youtubeManager,
+                        musicRouter: musicRouter,
                         hrRouter: hrRouter,
                         userProfile: profile
                     )
@@ -43,6 +43,7 @@ struct ContentView: View {
                         bluetoothManager: bluetoothManager,
                         voiceCoach: voiceCoach,
                         hrRouter: hrRouter,
+                        musicRouter: musicRouter,
                         userProfile: profile
                     )
                     .tabItem {
@@ -56,7 +57,8 @@ struct ContentView: View {
                     // time this view appears, and activate the current source.
                     hrRouter.select(profile.preferredHRSource)
                     hrRouter.activateCurrent()
-                    youtubeManager.setGenre(profile.preferredMusicGenre)
+                    musicRouter.setGenre(profile.preferredMusicGenre)
+                    musicRouter.setActiveSource(profile.musicSource)
                 }
                 .onChange(of: profile.preferredHRSourceRaw) { _, newRaw in
                     if let kind = HeartRateSourceKind(rawValue: newRaw) {
@@ -65,7 +67,12 @@ struct ContentView: View {
                 }
                 .onChange(of: profile.preferredMusicGenreRaw) { _, newRaw in
                     if let genre = MusicGenre(rawValue: newRaw) {
-                        youtubeManager.setGenre(genre)
+                        musicRouter.setGenre(genre)
+                    }
+                }
+                .onChange(of: profile.musicSourceRaw) { _, newRaw in
+                    if let kind = MusicSourceKind(rawValue: newRaw ?? "") {
+                        musicRouter.setActiveSource(kind)
                     }
                 }
             } else {
@@ -84,7 +91,7 @@ struct ContentView: View {
 struct WorkoutTabView: View {
     @ObservedObject var bluetoothManager: BluetoothManager
     @ObservedObject var voiceCoach: VoiceCoach
-    @ObservedObject var youtubeManager: YouTubePlayerManager
+    @ObservedObject var musicRouter: MusicRouter
     @ObservedObject var hrRouter: HeartRateRouter
     var userProfile: UserProfile
 
@@ -107,7 +114,7 @@ struct WorkoutTabView: View {
                     template: template,
                     bluetoothManager: bluetoothManager,
                     voiceCoach: voiceCoach,
-                    youtubeManager: youtubeManager,
+                    musicRouter: musicRouter,
                     hrRouter: hrRouter,
                     maxHR: userProfile.maxHR,
                     motivationFrequency: userProfile.motivationFrequency

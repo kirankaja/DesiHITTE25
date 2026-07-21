@@ -6,6 +6,7 @@ struct SettingsView: View {
     @ObservedObject var bluetoothManager: BluetoothManager
     @ObservedObject var voiceCoach: VoiceCoach
     @ObservedObject var hrRouter: HeartRateRouter
+    @ObservedObject var musicRouter: MusicRouter
     @Bindable var userProfile: UserProfile
 
     var body: some View {
@@ -126,6 +127,28 @@ struct SettingsView: View {
                     Text("Choose where DesiHITTE25 reads your heart rate from. Apple Watch (via Health) needs a workout running on the Watch for continuous readings. A dedicated Watch app for live streaming is coming in a future update.")
                 }
 
+                // Music Source (which backend supplies playback)
+                Section {
+                    Picker("Source", selection: Binding(
+                        get: { userProfile.musicSource },
+                        set: { userProfile.musicSource = $0 }
+                    )) {
+                        ForEach(MusicSourceKind.allCases) { kind in
+                            Text(kind.displayName).tag(kind)
+                        }
+                    }
+                    .pickerStyle(.inline)
+                    .labelsHidden()
+
+                    Text(userProfile.musicSource.subtitle)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                } header: {
+                    Text("Music Source")
+                } footer: {
+                    Text("Jamendo streams free, ad-free CC-licensed workout tracks — the safest default. YouTube gives you Bollywood/Pop hits but some tracks may be blocked by labels; the app auto-skips them.")
+                }
+
                 // Music Genre
                 Section {
                     Picker("Genre", selection: $userProfile.preferredMusicGenreRaw) {
@@ -139,8 +162,14 @@ struct SettingsView: View {
                     Text(userProfile.preferredMusicGenre.subtitle)
                         .font(.caption)
                         .foregroundColor(.secondary)
+
+                    if userProfile.musicSource == .jamendo {
+                        Label("Genre applies to YouTube source only. Jamendo picks tracks by intensity (cool-down / moderate / high-energy) from its royalty-free catalog.", systemImage: "info.circle")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
                 } header: {
-                    Text("Music")
+                    Text("Music Genre")
                 } footer: {
                     Text("Playlists are curated by intensity and matched to each interval's target zone (not your current heart rate) — so the music helps push you toward the target. Songs are tagged with approximate BPM: 60–95 for cool-down, 95–125 for moderate, 125+ for high energy. Switch genre anytime, even mid-workout.")
                 }

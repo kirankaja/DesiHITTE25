@@ -25,7 +25,7 @@ class WorkoutEngine: ObservableObject {
     // MARK: - Dependencies
     private var heartRateRouter: HeartRateRouter
     private var voiceCoach: VoiceCoach
-    private var youtubeManager: YouTubePlayerManager
+    private var musicController: MusicController
 
     // MARK: - Private State
     private var template: WorkoutTemplate?
@@ -40,10 +40,10 @@ class WorkoutEngine: ObservableObject {
     private var zoneTimers: [WorkoutZone: TimeInterval] = [:]
     private var cancellables = Set<AnyCancellable>()
 
-    init(heartRateRouter: HeartRateRouter, voiceCoach: VoiceCoach, youtubeManager: YouTubePlayerManager) {
+    init(heartRateRouter: HeartRateRouter, voiceCoach: VoiceCoach, musicController: MusicController) {
         self.heartRateRouter = heartRateRouter
         self.voiceCoach = voiceCoach
-        self.youtubeManager = youtubeManager
+        self.musicController = musicController
 
         for zone in WorkoutZone.allCases {
             zoneTimers[zone] = 0
@@ -113,7 +113,7 @@ class WorkoutEngine: ObservableObject {
         // player's currently-selected genre so a mid-workout genre swap can
         // re-plan cleanly.
         let categories = template.intervals.map { MusicPlaylist.category(for: $0.targetZone) }
-        youtubeManager.planSession(categories: categories, genre: youtubeManager.currentGenre)
+        musicController.planSession(categories: categories, genre: musicController.currentGenre)
 
         advanceToInterval(index: 0)
         startTimer()
@@ -121,7 +121,7 @@ class WorkoutEngine: ObservableObject {
         voiceCoach.announce("Chalo! Let's begin! \(template.name) workout starting now!")
         // Playlist was already set by advanceToInterval(0) based on the first
         // interval's targetZone — just start playing.
-        youtubeManager.play()
+        musicController.play()
     }
 
     func pauseWorkout() {
@@ -129,14 +129,14 @@ class WorkoutEngine: ObservableObject {
         workoutTimer = nil
         isWorkoutActive = false
         voiceCoach.announce("Workout paused. Take a breath.")
-        youtubeManager.pause()
+        musicController.pause()
     }
 
     func resumeWorkout() {
         isWorkoutActive = true
         startTimer()
         voiceCoach.announce("Let's go! Workout resumed!")
-        youtubeManager.play()
+        musicController.play()
     }
 
     func skipInterval() {
@@ -272,14 +272,14 @@ class WorkoutEngine: ObservableObject {
         // (e.g. workout started with an empty template).
         if isWorkoutActive {
             let category = MusicPlaylist.category(for: interval.targetZone)
-            youtubeManager.playPlannedTrack(at: index, fallbackCategory: category)
+            musicController.playPlannedTrack(at: index, fallbackCategory: category)
         }
     }
 
     /// Skip to another track in the current playlist whose BPM is closest to
     /// the currently-playing one. Called by the UI Skip button.
     func skipSong() {
-        youtubeManager.skipToSimilarBPM()
+        musicController.skipToSimilarBPM()
     }
 
     private func advanceToNextInterval() {
@@ -298,8 +298,8 @@ class WorkoutEngine: ObservableObject {
         #endif
 
         voiceCoach.announce("Bahut acche! Workout complete! You earned \(splatPoints) splat points today! Great job!")
-        youtubeManager.pause()
-        youtubeManager.clearSessionPlan()
+        musicController.pause()
+        musicController.clearSessionPlan()
     }
 
     private func updateResistanceSuggestion() {

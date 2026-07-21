@@ -8,7 +8,7 @@ struct WorkoutView: View {
     let template: WorkoutTemplate
     @ObservedObject var bluetoothManager: BluetoothManager
     @ObservedObject var voiceCoach: VoiceCoach
-    @ObservedObject var youtubeManager: YouTubePlayerManager
+    @ObservedObject var musicRouter: MusicRouter
     @ObservedObject var hrRouter: HeartRateRouter
     let maxHR: Int
     let motivationFrequency: TimeInterval
@@ -22,21 +22,21 @@ struct WorkoutView: View {
     init(template: WorkoutTemplate,
          bluetoothManager: BluetoothManager,
          voiceCoach: VoiceCoach,
-         youtubeManager: YouTubePlayerManager,
+         musicRouter: MusicRouter,
          hrRouter: HeartRateRouter,
          maxHR: Int,
          motivationFrequency: TimeInterval) {
         self.template = template
         self.bluetoothManager = bluetoothManager
         self.voiceCoach = voiceCoach
-        self.youtubeManager = youtubeManager
+        self.musicRouter = musicRouter
         self.hrRouter = hrRouter
         self.maxHR = maxHR
         self.motivationFrequency = motivationFrequency
         _workoutEngine = StateObject(wrappedValue: WorkoutEngine(
             heartRateRouter: hrRouter,
             voiceCoach: voiceCoach,
-            youtubeManager: youtubeManager
+            musicController: musicRouter
         ))
     }
 
@@ -64,36 +64,49 @@ struct WorkoutView: View {
                     .padding(.horizontal)
                     .padding(.top, 8)
 
-                // Compact audio strip — video is intentionally tiny (48pt) so
-                // it doesn't compete with the workout data for attention. The
+                // Compact audio strip — YouTube video is intentionally tiny
+                // (48pt) so it doesn't compete with workout data. Jamendo has
+                // no video, so we show a small album-art tile instead. The
                 // now-playing row below is the primary "what's playing" cue.
                 HStack(spacing: 10) {
-                    YouTubePlayerView(manager: youtubeManager)
-                        .frame(width: 72, height: 48)
-                        .cornerRadius(6)
-                        .clipped()
-                        .accessibilityHidden(true)
+                    Group {
+                        if musicRouter.activeSource == .youtube {
+                            YouTubePlayerView(manager: musicRouter.youtubeManager)
+                        } else {
+                            JamendoMiniArt(track: musicRouter.jamendoSource.currentTrack)
+                        }
+                    }
+                    .frame(width: 72, height: 48)
+                    .cornerRadius(6)
+                    .clipped()
+                    .accessibilityHidden(true)
 
-                    if let track = youtubeManager.currentTrack {
+                    if !musicRouter.currentTitle.isEmpty {
                         VStack(alignment: .leading, spacing: 2) {
                             HStack(spacing: 6) {
                                 Image(systemName: "music.quarternote.3")
                                     .font(.caption2)
                                     .foregroundColor(.orange)
-                                Text(track.title)
+                                Text(musicRouter.currentTitle)
                                     .font(.caption.weight(.medium))
                                     .foregroundColor(.white)
                                     .lineLimit(1)
                                     .truncationMode(.tail)
                             }
-                            Text("\(track.bpm) BPM")
-                                .font(.caption2.monospacedDigit())
-                                .foregroundColor(.white.opacity(0.6))
+                            if let bpm = musicRouter.currentBPM {
+                                Text("\(bpm) BPM")
+                                    .font(.caption2.monospacedDigit())
+                                    .foregroundColor(.white.opacity(0.6))
+                            } else {
+                                Text(musicRouter.activeSource.displayName)
+                                    .font(.caption2)
+                                    .foregroundColor(.white.opacity(0.6))
+                            }
                         }
                         .accessibilityElement(children: .combine)
-                        .accessibilityLabel("Now playing \(track.title), \(track.bpm) beats per minute")
+                        .accessibilityLabel("Now playing \(musicRouter.currentTitle)")
                     } else {
-                        Text("Music")
+                        Text("Loading music…")
                             .font(.caption)
                             .foregroundColor(.white.opacity(0.5))
                     }
@@ -405,5 +418,43 @@ struct WorkoutView: View {
                 .foregroundColor(.white.opacity(0.75))
                 .lineLimit(1)
         }
+    }
+}
+
+// MARK: - Jamendo Mini Art
+
+/// Tiny album-art tile shown in place of the YouTube video frame when Jamendo
+/// is the active music source. AsyncImage handles Jamendo's album art URLs;
+/// falls back to a music-note icon when the track has no image or hasn't
+/// loaded yet.
+struct JamendoMiniArt: View {
+    let track: JamendoMusicSource.JamendoTrack?
+
+    var body: some View {
+        ZStack {
+            LinearGradient(
+                colors: [.orange.opacity(0.4), .red.opacity(0.4)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            if let url = track?.albumImageURL {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image.resizable().scaledToFill()
+                    default:
+                        placeholder
+                    }
+                }
+            } else {
+                placeholder
+            }
+        }
+    }
+
+    private var placeholder: some View {
+        Image(systemName: "music.note")
+            .font(.title3)
+            .foregroundColor(.white.opacity(0.8))
     }
 }

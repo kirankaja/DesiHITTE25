@@ -93,6 +93,9 @@ final class UserProfile {
     var hasCompletedOnboarding: Bool
     var preferredHRSourceRaw: String
     var preferredMusicGenreRaw: String
+    /// Optional so existing on-device profiles (from older builds) can migrate
+    /// without a schema break — a nil value is treated as `.jamendo` (default).
+    var musicSourceRaw: String?
 
     init(
         age: Int = 30,
@@ -102,7 +105,8 @@ final class UserProfile {
         motivationFrequency: TimeInterval = 35,
         hasCompletedOnboarding: Bool = false,
         preferredHRSourceRaw: String = HeartRateSourceKind.bluetoothFTMS.rawValue,
-        preferredMusicGenreRaw: String = MusicGenre.bollywood.rawValue
+        preferredMusicGenreRaw: String = MusicGenre.bollywood.rawValue,
+        musicSourceRaw: String? = MusicSourceKind.jamendo.rawValue
     ) {
         self.id = UUID()
         self.age = age
@@ -113,6 +117,7 @@ final class UserProfile {
         self.hasCompletedOnboarding = hasCompletedOnboarding
         self.preferredHRSourceRaw = preferredHRSourceRaw
         self.preferredMusicGenreRaw = preferredMusicGenreRaw
+        self.musicSourceRaw = musicSourceRaw
     }
 
     var maxHR: Int {
@@ -127,5 +132,10 @@ final class UserProfile {
     var preferredMusicGenre: MusicGenre {
         get { MusicGenre(rawValue: preferredMusicGenreRaw) ?? .bollywood }
         set { preferredMusicGenreRaw = newValue.rawValue }
+    }
+
+    var musicSource: MusicSourceKind {
+        get { MusicSourceKind(rawValue: musicSourceRaw ?? "") ?? .jamendo }
+        set { musicSourceRaw = newValue.rawValue }
     }
 }
