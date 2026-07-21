@@ -9,6 +9,7 @@ struct WorkoutView: View {
     @ObservedObject var bluetoothManager: BluetoothManager
     @ObservedObject var voiceCoach: VoiceCoach
     @ObservedObject var youtubeManager: YouTubePlayerManager
+    @ObservedObject var hrRouter: HeartRateRouter
     let maxHR: Int
     let motivationFrequency: TimeInterval
 
@@ -22,16 +23,18 @@ struct WorkoutView: View {
          bluetoothManager: BluetoothManager,
          voiceCoach: VoiceCoach,
          youtubeManager: YouTubePlayerManager,
+         hrRouter: HeartRateRouter,
          maxHR: Int,
          motivationFrequency: TimeInterval) {
         self.template = template
         self.bluetoothManager = bluetoothManager
         self.voiceCoach = voiceCoach
         self.youtubeManager = youtubeManager
+        self.hrRouter = hrRouter
         self.maxHR = maxHR
         self.motivationFrequency = motivationFrequency
         _workoutEngine = StateObject(wrappedValue: WorkoutEngine(
-            bluetoothManager: bluetoothManager,
+            heartRateRouter: hrRouter,
             voiceCoach: voiceCoach,
             youtubeManager: youtubeManager
         ))
@@ -46,21 +49,59 @@ struct WorkoutView: View {
             VStack(spacing: 0) {
                 ZoneBarView(
                     currentZone: workoutEngine.currentZone,
-                    heartRate: bluetoothManager.heartRate,
+                    targetZone: workoutEngine.currentInterval?.targetZone,
+                    heartRate: hrRouter.heartRate,
                     maxHR: maxHR
                 )
                 .padding(.horizontal)
                 .padding(.top, 8)
 
+                workoutProgress
+                    .padding(.horizontal)
+                    .padding(.top, 6)
+
                 statsRow
                     .padding(.horizontal)
                     .padding(.top, 8)
 
-                YouTubePlayerView(manager: youtubeManager)
-                    .frame(height: UIScreen.main.bounds.height * 0.3)
-                    .cornerRadius(12)
-                    .padding(.horizontal)
-                    .padding(.top, 8)
+                // Compact audio strip — video is intentionally tiny (48pt) so
+                // it doesn't compete with the workout data for attention. The
+                // now-playing row below is the primary "what's playing" cue.
+                HStack(spacing: 10) {
+                    YouTubePlayerView(manager: youtubeManager)
+                        .frame(width: 72, height: 48)
+                        .cornerRadius(6)
+                        .clipped()
+                        .accessibilityHidden(true)
+
+                    if let track = youtubeManager.currentTrack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "music.quarternote.3")
+                                    .font(.caption2)
+                                    .foregroundColor(.orange)
+                                Text(track.title)
+                                    .font(.caption.weight(.medium))
+                                    .foregroundColor(.white)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+                            }
+                            Text("\(track.bpm) BPM")
+                                .font(.caption2.monospacedDigit())
+                                .foregroundColor(.white.opacity(0.6))
+                        }
+                        .accessibilityElement(children: .combine)
+                        .accessibilityLabel("Now playing \(track.title), \(track.bpm) beats per minute")
+                    } else {
+                        Text("Music")
+                            .font(.caption)
+                            .foregroundColor(.white.opacity(0.5))
+                    }
+
+                    Spacer()
+                }
+                .padding(.horizontal)
+                .padding(.top, 8)
 
                 intervalInfo
                     .padding(.horizontal)
@@ -75,12 +116,20 @@ struct WorkoutView: View {
         }
         .preferredColorScheme(.dark)
         .onAppear {
+            // Keep the screen awake during a workout — locking mid-set is a
+            // real usability failure when the user's hands are on the machine.
+            UIApplication.shared.isIdleTimerDisabled = true
             workoutEngine.startWorkout(
                 template: template,
                 maxHR: maxHR,
                 motivationFrequency: motivationFrequency
             )
         }
+        .onDisappear {
+            UIApplication.shared.isIdleTimerDisabled = false
+        }
+        .sensoryFeedback(.impact(weight: .medium), trigger: workoutEngine.currentIntervalIndex)
+        .sensoryFeedback(.selection, trigger: workoutEngine.currentZone)
         .onChange(of: workoutEngine.workoutState) { _, newState in
             if newState == .complete {
                 let session = workoutEngine.createSession()
@@ -107,6 +156,29 @@ struct WorkoutView: View {
         }
     }
 
+    // MARK: - Workout Progress
+
+    /// Slim progress strip: "Interval 3 of 7" + total-workout progress bar.
+    /// Lets the user pace themselves at a glance without doing mental math.
+    private var workoutProgress: some View {
+        VStack(spacing: 4) {
+            HStack {
+                Text("Interval \(workoutEngine.currentIntervalIndex + 1) of \(template.intervals.count)")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                Spacer()
+                Text(template.formattedTotalDuration)
+                    .font(.caption2.monospacedDigit())
+                    .foregroundColor(.secondary)
+            }
+            ProgressView(value: workoutEngine.progress)
+                .tint(.orange)
+                .scaleEffect(x: 1, y: 0.6, anchor: .center)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Interval \(workoutEngine.currentIntervalIndex + 1) of \(template.intervals.count)")
+    }
+
     // MARK: - Stats Row
 
     private var statsRow: some View {
@@ -116,7 +188,7 @@ struct WorkoutView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "heart.fill")
                         .foregroundColor(workoutEngine.currentZone.color)
-                    Text("\(bluetoothManager.heartRate)")
+                    Text("\(hrRouter.heartRate)")
                         .font(.system(size: 36, weight: .bold, design: .rounded))
                         .foregroundColor(workoutEngine.currentZone.color)
                 }
@@ -235,76 +307,103 @@ struct WorkoutView: View {
     // MARK: - Controls
 
     private var controlBar: some View {
-        HStack(spacing: 20) {
-            // Mute Coach
-            Button {
+        HStack(spacing: 16) {
+            controlButton(
+                systemImage: voiceCoach.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill",
+                label: voiceCoach.isMuted ? "Unmute" : "Mute",
+                tint: voiceCoach.isMuted ? .red : .white,
+                accessibilityLabel: voiceCoach.isMuted ? "Unmute coach" : "Mute coach"
+            ) {
                 voiceCoach.isMuted.toggle()
-            } label: {
-                Image(systemName: voiceCoach.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                    .font(.title3)
-                    .foregroundColor(voiceCoach.isMuted ? .red : .white)
-                    .frame(width: 44, height: 44)
-                    .background(Color.white.opacity(0.15))
-                    .clipShape(Circle())
             }
 
-            // Skip Interval
-            Button {
+            controlButton(
+                systemImage: "forward.fill",
+                label: "Interval",
+                tint: .white,
+                accessibilityLabel: "Skip to next interval"
+            ) {
                 workoutEngine.skipInterval()
-            } label: {
-                Image(systemName: "forward.fill")
-                    .font(.title3)
-                    .foregroundColor(.white)
-                    .frame(width: 44, height: 44)
-                    .background(Color.white.opacity(0.15))
-                    .clipShape(Circle())
             }
 
-            // Play/Pause
-            Button {
-                if workoutEngine.isWorkoutActive {
-                    workoutEngine.pauseWorkout()
-                } else if workoutEngine.workoutState != .complete {
-                    workoutEngine.resumeWorkout()
-                }
-            } label: {
-                Image(systemName: workoutEngine.isWorkoutActive ? "pause.fill" : "play.fill")
-                    .font(.title)
-                    .foregroundColor(.white)
-                    .frame(width: 64, height: 64)
-                    .background(
-                        LinearGradient(
-                            colors: [.orange, .red],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
+            // Play / Pause — primary, larger
+            VStack(spacing: 4) {
+                Button {
+                    if workoutEngine.isWorkoutActive {
+                        workoutEngine.pauseWorkout()
+                    } else if workoutEngine.workoutState != .complete {
+                        workoutEngine.resumeWorkout()
+                    }
+                } label: {
+                    Image(systemName: workoutEngine.isWorkoutActive ? "pause.fill" : "play.fill")
+                        .font(.title)
+                        .foregroundColor(.white)
+                        .frame(width: 64, height: 64)
+                        .background(
+                            LinearGradient(
+                                colors: [.orange, .red],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
                         )
-                    )
-                    .clipShape(Circle())
+                        .clipShape(Circle())
+                }
+                .accessibilityLabel(workoutEngine.isWorkoutActive ? "Pause workout" : "Resume workout")
+                .sensoryFeedback(.impact(weight: .heavy), trigger: workoutEngine.isWorkoutActive)
+
+                Text(workoutEngine.isWorkoutActive ? "Pause" : "Play")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.9))
             }
 
-            // Music Next
-            Button {
-                youtubeManager.next()
-            } label: {
-                Image(systemName: "music.note")
-                    .font(.title3)
-                    .foregroundColor(.white)
-                    .frame(width: 44, height: 44)
-                    .background(Color.white.opacity(0.15))
-                    .clipShape(Circle())
+            controlButton(
+                systemImage: "forward.end.fill",
+                label: "Song",
+                tint: .white,
+                accessibilityLabel: "Skip song, similar BPM"
+            ) {
+                workoutEngine.skipSong()
             }
 
-            // End Workout
-            Button {
+            controlButton(
+                systemImage: "xmark",
+                label: "End",
+                tint: .red,
+                bg: Color.red.opacity(0.15),
+                accessibilityLabel: "End workout"
+            ) {
                 showEndConfirm = true
-            } label: {
-                Image(systemName: "xmark")
+            }
+        }
+    }
+
+    /// Consistent secondary control button — icon + label + haptic. Adding
+    /// the label under each icon eliminates the ambiguity between
+    /// forward.fill (Skip Interval) and forward.end.fill (Skip Song).
+    private func controlButton(
+        systemImage: String,
+        label: String,
+        tint: Color,
+        bg: Color = Color.white.opacity(0.15),
+        accessibilityLabel: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        VStack(spacing: 4) {
+            Button(action: action) {
+                Image(systemName: systemImage)
                     .font(.title3)
-                    .foregroundColor(.red)
+                    .foregroundColor(tint)
                     .frame(width: 44, height: 44)
-                    .background(Color.red.opacity(0.15))
+                    .background(bg)
                     .clipShape(Circle())
             }
+            .accessibilityLabel(accessibilityLabel)
+            .sensoryFeedback(.impact(weight: .light), trigger: label)
+
+            Text(label)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(.white.opacity(0.75))
+                .lineLimit(1)
         }
     }
 }

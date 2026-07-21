@@ -23,7 +23,7 @@ class WorkoutEngine: ObservableObject {
     @Published var resistanceSuggestion: String = ""
 
     // MARK: - Dependencies
-    private var bluetoothManager: BluetoothManager
+    private var heartRateRouter: HeartRateRouter
     private var voiceCoach: VoiceCoach
     private var youtubeManager: YouTubePlayerManager
 
@@ -40,8 +40,8 @@ class WorkoutEngine: ObservableObject {
     private var zoneTimers: [WorkoutZone: TimeInterval] = [:]
     private var cancellables = Set<AnyCancellable>()
 
-    init(bluetoothManager: BluetoothManager, voiceCoach: VoiceCoach, youtubeManager: YouTubePlayerManager) {
-        self.bluetoothManager = bluetoothManager
+    init(heartRateRouter: HeartRateRouter, voiceCoach: VoiceCoach, youtubeManager: YouTubePlayerManager) {
+        self.heartRateRouter = heartRateRouter
         self.voiceCoach = voiceCoach
         self.youtubeManager = youtubeManager
 
@@ -55,7 +55,7 @@ class WorkoutEngine: ObservableObject {
     // MARK: - HR Subscription
 
     private func setupHRSubscription() {
-        bluetoothManager.$heartRate
+        heartRateRouter.$heartRate
             .receive(on: RunLoop.main)
             .sink { [weak self] hr in
                 guard let self = self, hr > 0 else { return }
@@ -71,8 +71,10 @@ class WorkoutEngine: ObservableObject {
 
         if newZone != lastZone && isWorkoutActive {
             voiceCoach.announceZoneChange(to: newZone)
-            let category = BollywoodPlaylist.category(for: newZone)
-            youtubeManager.switchPlaylist(to: category)
+            // NOTE: music playlist is NOT switched here — it's driven by the
+            // interval's *target* zone (see advanceToInterval) so songs are
+            // chosen to help the user climb toward the expected intensity,
+            // not chase whatever their body is currently doing.
             lastZone = newZone
         }
 
@@ -101,15 +103,24 @@ class WorkoutEngine: ObservableObject {
         }
 
         #if targetEnvironment(simulator)
-        bluetoothManager.startSimulatedWorkout()
+        heartRateRouter.bluetooth.startSimulatedWorkout()
         #endif
 
         isWorkoutActive = true
+
+        // Pre-plan the entire session's music: one track per interval, each
+        // chosen by BPM proximity to the interval's target category. Uses the
+        // player's currently-selected genre so a mid-workout genre swap can
+        // re-plan cleanly.
+        let categories = template.intervals.map { MusicPlaylist.category(for: $0.targetZone) }
+        youtubeManager.planSession(categories: categories, genre: youtubeManager.currentGenre)
+
         advanceToInterval(index: 0)
         startTimer()
 
         voiceCoach.announce("Chalo! Let's begin! \(template.name) workout starting now!")
-        youtubeManager.switchPlaylist(to: .moderate)
+        // Playlist was already set by advanceToInterval(0) based on the first
+        // interval's targetZone — just start playing.
         youtubeManager.play()
     }
 
@@ -227,7 +238,7 @@ class WorkoutEngine: ObservableObject {
         #if targetEnvironment(simulator)
         // In simulator, gradually shift HR toward target zone
         if let interval = currentInterval {
-            bluetoothManager.simulateHRForZone(interval.targetZone, maxHR: maxHR)
+            heartRateRouter.bluetooth.simulateHRForZone(interval.targetZone, maxHR: maxHR)
         }
         #endif
     }
@@ -254,6 +265,21 @@ class WorkoutEngine: ObservableObject {
 
         voiceCoach.announceIntervalChange(interval)
         updateResistanceSuggestion()
+
+        // Prescriptive music: play the pre-planned track for this interval,
+        // chosen at session start by BPM proximity to the interval's target
+        // category. Falls back to a plain playlist swap if no plan exists
+        // (e.g. workout started with an empty template).
+        if isWorkoutActive {
+            let category = MusicPlaylist.category(for: interval.targetZone)
+            youtubeManager.playPlannedTrack(at: index, fallbackCategory: category)
+        }
+    }
+
+    /// Skip to another track in the current playlist whose BPM is closest to
+    /// the currently-playing one. Called by the UI Skip button.
+    func skipSong() {
+        youtubeManager.skipToSimilarBPM()
     }
 
     private func advanceToNextInterval() {
@@ -268,11 +294,12 @@ class WorkoutEngine: ObservableObject {
         workoutState = .complete
 
         #if targetEnvironment(simulator)
-        bluetoothManager.stopSimulatedWorkout()
+        heartRateRouter.bluetooth.stopSimulatedWorkout()
         #endif
 
         voiceCoach.announce("Bahut acche! Workout complete! You earned \(splatPoints) splat points today! Great job!")
         youtubeManager.pause()
+        youtubeManager.clearSessionPlan()
     }
 
     private func updateResistanceSuggestion() {

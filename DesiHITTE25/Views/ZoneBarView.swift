@@ -2,6 +2,10 @@ import SwiftUI
 
 struct ZoneBarView: View {
     let currentZone: WorkoutZone
+    /// The zone the current interval is aiming for. When present, its segment
+    /// gets a "TARGET" chip and a bright dashed outline so the user immediately
+    /// knows where they need to be, without cross-referencing the interval card.
+    var targetZone: WorkoutZone? = nil
     let heartRate: Int
     let maxHR: Int
 
@@ -27,6 +31,7 @@ struct ZoneBarView: View {
                             ZoneSegment(
                                 zone: zone,
                                 isActive: zone == currentZone,
+                                isTarget: zone == targetZone,
                                 pulseAnimation: pulseAnimation
                             )
                         }
@@ -47,6 +52,7 @@ struct ZoneBarView: View {
                         }
                         .offset(x: xPosition - 5)
                         .animation(.spring(response: 0.5), value: heartRate)
+                        .accessibilityHidden(true)
                     }
                 }
             }
@@ -75,6 +81,16 @@ struct ZoneBarView: View {
                 pulseAnimation = true
             }
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(accessibilitySummary)
+    }
+
+    private var accessibilitySummary: String {
+        var s = "Current zone: \(currentZone.name). Heart rate: \(heartRate > 0 ? "\(heartRate) BPM" : "not detected")."
+        if let target = targetZone {
+            s += " Target zone: \(target.name)."
+        }
+        return s
     }
 }
 
@@ -83,15 +99,17 @@ struct ZoneBarView: View {
 struct ZoneSegment: View {
     let zone: WorkoutZone
     let isActive: Bool
+    var isTarget: Bool = false
     let pulseAnimation: Bool
 
     var body: some View {
         RoundedRectangle(cornerRadius: 4)
             .fill(zone.color)
-            .opacity(isActive ? 1.0 : 0.35)
+            .opacity(isActive ? 1.0 : (isTarget ? 0.6 : 0.35))
             .overlay(
                 RoundedRectangle(cornerRadius: 4)
-                    .stroke(isActive ? Color.white : Color.clear, lineWidth: 2)
+                    .stroke(isActive ? Color.white : (isTarget ? Color.white.opacity(0.9) : Color.clear),
+                            style: StrokeStyle(lineWidth: isTarget && !isActive ? 1.5 : 2, dash: isTarget && !isActive ? [3, 2] : []))
             )
             .shadow(
                 color: isActive ? zone.color.opacity(pulseAnimation ? 0.8 : 0.3) : .clear,

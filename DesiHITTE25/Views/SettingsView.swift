@@ -5,6 +5,7 @@ struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
     @ObservedObject var bluetoothManager: BluetoothManager
     @ObservedObject var voiceCoach: VoiceCoach
+    @ObservedObject var hrRouter: HeartRateRouter
     @Bindable var userProfile: UserProfile
 
     var body: some View {
@@ -91,6 +92,57 @@ struct SettingsView: View {
                     Button("Test Coach Voice") {
                         voiceCoach.announce("Chalo! Testing voice coach. Bahut acche!")
                     }
+                }
+
+                // Heart Rate Source
+                Section {
+                    Picker("Source", selection: $userProfile.preferredHRSourceRaw) {
+                        ForEach(HeartRateSourceKind.allCases.filter { $0.isAvailable }, id: \.rawValue) { kind in
+                            Text(kind.displayName).tag(kind.rawValue)
+                        }
+                    }
+                    .pickerStyle(.inline)
+                    .labelsHidden()
+
+                    Text(userProfile.preferredHRSource.subtitle)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
+                    HStack {
+                        Circle()
+                            .fill(hrRouter.activeSourceIsReceiving ? .green : .orange)
+                            .frame(width: 8, height: 8)
+                        Text(hrRouter.activeSourceStatus.isEmpty ? "Idle" : hrRouter.activeSourceStatus)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Text("\(hrRouter.heartRate) BPM")
+                            .font(.caption.monospacedDigit())
+                            .foregroundColor(.secondary)
+                    }
+                } header: {
+                    Text("Heart Rate Source")
+                } footer: {
+                    Text("Choose where DesiHITTE25 reads your heart rate from. Apple Watch (via Health) needs a workout running on the Watch for continuous readings. A dedicated Watch app for live streaming is coming in a future update.")
+                }
+
+                // Music Genre
+                Section {
+                    Picker("Genre", selection: $userProfile.preferredMusicGenreRaw) {
+                        ForEach(MusicGenre.allCases) { genre in
+                            Text(genre.displayName).tag(genre.rawValue)
+                        }
+                    }
+                    .pickerStyle(.inline)
+                    .labelsHidden()
+
+                    Text(userProfile.preferredMusicGenre.subtitle)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                } header: {
+                    Text("Music")
+                } footer: {
+                    Text("Playlists are curated by intensity and matched to each interval's target zone (not your current heart rate) — so the music helps push you toward the target. Songs are tagged with approximate BPM: 60–95 for cool-down, 95–125 for moderate, 125+ for high energy. Switch genre anytime, even mid-workout.")
                 }
 
                 // Bluetooth Device
