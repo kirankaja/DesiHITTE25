@@ -307,7 +307,7 @@ struct WorkoutView: View {
             Button {
                 workoutEngine.skipSong()
             } label: {
-                Image(systemName: "forward.fill")
+                Image(systemName: "forward.end.fill")
                     .font(.title3)
                     .foregroundColor(.white)
                     .frame(width: 44, height: 44)
