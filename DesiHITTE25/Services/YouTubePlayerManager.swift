@@ -196,11 +196,7 @@ class YouTubePlayerManager: ObservableObject, MusicController {
         // Genre change invalidates the BPM-planned queue; re-plan against the
         // same interval-category sequence in the new genre.
         if !sessionPlanCategories.isEmpty {
-            sessionPlan = MusicLibrary.planSession(
-                categories: sessionPlanCategories,
-                genre: genre,
-                blockedIDs: YouTubePlayabilityFilter.shared.currentBlockedIDs
-            )
+            sessionPlan = buildPlan(for: sessionPlanCategories, genre: genre)
         }
     }
 
@@ -209,14 +205,41 @@ class YouTubePlayerManager: ObservableObject, MusicController {
     /// to the middle of its category's BPM range, avoiding immediate repeats.
     /// Call once at workout start; call `playPlannedTrack(at:)` on each
     /// interval boundary.
+    ///
+    /// If a YouTube Data API v3 key is configured, warms the dynamic search
+    /// pool for the categories in this session in parallel. When the fetches
+    /// return, the plan is re-computed against the fresh (embed-verified)
+    /// tracks and the currently-loaded playlist is refreshed. Until then,
+    /// the curated fallback library is used so playback never stalls
+    /// waiting on the network.
     func planSession(categories: [PlaylistCategory], genre: MusicGenre) {
         currentGenre = genre
         sessionPlanCategories = categories
-        sessionPlan = MusicLibrary.planSession(
-            categories: categories,
-            genre: genre,
-            blockedIDs: YouTubePlayabilityFilter.shared.currentBlockedIDs
-        )
+        sessionPlan = buildPlan(for: categories, genre: genre)
+
+        // Fire-and-forget dynamic warm. Only Bollywood is backed by search
+        // right now — pop still uses the curated library.
+        guard genre == .bollywood, APIKeyStore.shared.hasYoutubeAPIKey else { return }
+        let unique = Array(Set(categories))
+        Task { [weak self] in
+            await withTaskGroup(of: Void.self) { group in
+                for cat in unique {
+                    group.addTask {
+                        _ = await YouTubeSearchService.shared.fetchPool(for: cat)
+                    }
+                }
+            }
+            await MainActor.run { [weak self] in
+                guard let self else { return }
+                // Only refresh if the workout hasn't moved on.
+                guard self.sessionPlanCategories == categories, self.currentGenre == genre else { return }
+                self.sessionPlan = self.buildPlan(for: categories, genre: genre)
+                // Reload the currently-playing category so the user hears
+                // fresh dynamic tracks instead of the curated fallback.
+                self.applyPlaylist(category: self.currentCategory, genre: genre, force: true)
+                self.objectWillChange.send()
+            }
+        }
     }
 
     func clearSessionPlan() {
@@ -235,15 +258,15 @@ class YouTubePlayerManager: ObservableObject, MusicController {
         // Load the whole category playlist so ENDED wrap-around still works
         // after the planned track finishes. Filter out known-bad IDs so the
         // wrap-around doesn't land on a video we already know is unplayable.
-        let playlist = MusicLibrary.playlist(genre: currentGenre, category: fallbackCategory)
-        let filtered = YouTubePlayabilityFilter.shared.playableTracks(playlist.tracks)
+        let source = tracks(for: fallbackCategory, genre: currentGenre)
+        let filtered = YouTubePlayabilityFilter.shared.playableTracks(source)
         // Always include the planned track itself even if the filter would
         // exclude it — the runtime error handler will move on if it fails.
         var tracks = filtered
         if !tracks.contains(where: { $0.videoID == track.videoID }) {
             tracks.insert(track, at: 0)
         }
-        if tracks.isEmpty { tracks = playlist.tracks }
+        if tracks.isEmpty { tracks = source }
 
         currentCategory = fallbackCategory
         currentPlaylist = tracks.map(\.videoID)
@@ -296,12 +319,12 @@ class YouTubePlayerManager: ObservableObject, MusicController {
         if !force, category == currentCategory, genre == currentGenre { return }
         currentCategory = category
         currentGenre = genre
-        let playlist = MusicLibrary.playlist(genre: genre, category: category)
+        let source = tracks(for: category, genre: genre)
         // Filter to only playable tracks. If everything is blocklisted for
         // this category (unlikely but possible after heavy churn), fall back
         // to the full list — runtime auto-skip will still handle it.
-        let filtered = YouTubePlayabilityFilter.shared.playableTracks(playlist.tracks)
-        let tracks = filtered.isEmpty ? playlist.tracks : filtered
+        let filtered = YouTubePlayabilityFilter.shared.playableTracks(source)
+        let tracks = filtered.isEmpty ? source : filtered
         currentPlaylist = tracks.map(\.videoID)
         currentPlaylistTracks = tracks
         currentVideoIndex = 0
@@ -310,6 +333,75 @@ class YouTubePlayerManager: ObservableObject, MusicController {
         DispatchQueue.main.async { [weak self] in
             self?.currentTrack = tracks.first
         }
+    }
+
+    // MARK: - Dynamic-vs-curated track selection
+
+    /// Return the best available track pool for a category+genre. When
+    /// Bollywood is selected AND the YouTube Data API key is set AND the
+    /// dynamic search cache has results for this category, prefer the
+    /// dynamic pool. Otherwise fall back to the hand-curated MusicLibrary.
+    private func tracks(for category: PlaylistCategory, genre: MusicGenre) -> [MusicTrack] {
+        if genre == .bollywood,
+           APIKeyStore.shared.hasYoutubeAPIKey,
+           let dynamic = YouTubeSearchService.shared.cachedTracks(for: category),
+           !dynamic.isEmpty {
+            return dynamic
+        }
+        return MusicLibrary.playlist(genre: genre, category: category).tracks
+    }
+
+    /// Build a per-interval track plan across a workout's category sequence.
+    /// Uses the dynamic pool when it's warm; falls back to MusicLibrary's
+    /// BPM-aware planner otherwise.
+    ///
+    /// For dynamic tracks we don't have real BPM data (YT doesn't expose it),
+    /// so we shuffle within category and avoid immediate-neighbor repeats.
+    private func buildPlan(for categories: [PlaylistCategory], genre: MusicGenre) -> [MusicTrack] {
+        // If the dynamic pool has entries for every unique category in the
+        // sequence, plan from it. Otherwise defer to the curated planner
+        // (which knows how to interleave BPMs and avoid repeats).
+        let uniqueCats = Set(categories)
+        let dynamicUsable = genre == .bollywood
+            && APIKeyStore.shared.hasYoutubeAPIKey
+            && uniqueCats.allSatisfy { cat in
+                (YouTubeSearchService.shared.cachedTracks(for: cat)?.isEmpty == false)
+            }
+
+        if dynamicUsable {
+            var pools: [PlaylistCategory: [MusicTrack]] = [:]
+            for cat in uniqueCats {
+                pools[cat] = (YouTubeSearchService.shared.cachedTracks(for: cat) ?? []).shuffled()
+            }
+            var lastPlayed: MusicTrack?
+            var plan: [MusicTrack] = []
+            for cat in categories {
+                var pool = pools[cat] ?? []
+                if pool.isEmpty {
+                    pool = (YouTubeSearchService.shared.cachedTracks(for: cat) ?? []).shuffled()
+                }
+                // Avoid picking the last-played track twice in a row.
+                var candidate = pool.first(where: { $0.videoID != lastPlayed?.videoID }) ?? pool.first
+                if candidate == nil {
+                    // Ultimate fallback to curated library for this interval.
+                    candidate = MusicLibrary.playlist(genre: genre, category: cat).tracks.first
+                }
+                if let picked = candidate {
+                    plan.append(picked)
+                    lastPlayed = picked
+                    // Rotate the pool so subsequent intervals in the same
+                    // category pull a different track.
+                    pools[cat] = pool.filter { $0.videoID != picked.videoID } + [picked]
+                }
+            }
+            return plan
+        }
+
+        return MusicLibrary.planSession(
+            categories: categories,
+            genre: genre,
+            blockedIDs: YouTubePlayabilityFilter.shared.currentBlockedIDs
+        )
     }
 
     // MARK: - Message Handlers
