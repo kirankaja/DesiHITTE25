@@ -64,32 +64,44 @@ struct WorkoutView: View {
                     .padding(.horizontal)
                     .padding(.top, 8)
 
-                YouTubePlayerView(manager: youtubeManager)
-                    .frame(height: UIScreen.main.bounds.height * 0.3)
-                    .cornerRadius(12)
-                    .padding(.horizontal)
-                    .padding(.top, 8)
+                // Compact audio strip — video is intentionally tiny (48pt) so
+                // it doesn't compete with the workout data for attention. The
+                // now-playing row below is the primary "what's playing" cue.
+                HStack(spacing: 10) {
+                    YouTubePlayerView(manager: youtubeManager)
+                        .frame(width: 72, height: 48)
+                        .cornerRadius(6)
+                        .clipped()
+                        .accessibilityHidden(true)
 
-                if let track = youtubeManager.currentTrack {
-                    HStack(spacing: 8) {
-                        Image(systemName: "music.quarternote.3")
+                    if let track = youtubeManager.currentTrack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "music.quarternote.3")
+                                    .font(.caption2)
+                                    .foregroundColor(.orange)
+                                Text(track.title)
+                                    .font(.caption.weight(.medium))
+                                    .foregroundColor(.white)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+                            }
+                            Text("\(track.bpm) BPM")
+                                .font(.caption2.monospacedDigit())
+                                .foregroundColor(.white.opacity(0.6))
+                        }
+                        .accessibilityElement(children: .combine)
+                        .accessibilityLabel("Now playing \(track.title), \(track.bpm) beats per minute")
+                    } else {
+                        Text("Music")
                             .font(.caption)
-                            .foregroundColor(.orange)
-                        Text(track.title)
-                            .font(.caption)
-                            .foregroundColor(.white)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                        Text("· \(track.bpm) BPM")
-                            .font(.caption.monospacedDigit())
-                            .foregroundColor(.white.opacity(0.7))
-                        Spacer()
+                            .foregroundColor(.white.opacity(0.5))
                     }
-                    .padding(.horizontal)
-                    .padding(.top, 4)
-                    .accessibilityElement(children: .combine)
-                    .accessibilityLabel("Now playing \(track.title), \(track.bpm) beats per minute")
+
+                    Spacer()
                 }
+                .padding(.horizontal)
+                .padding(.top, 8)
 
                 intervalInfo
                     .padding(.horizontal)
