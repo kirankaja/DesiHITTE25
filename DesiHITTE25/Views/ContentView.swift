@@ -89,7 +89,6 @@ struct WorkoutTabView: View {
     var userProfile: UserProfile
 
     @State private var selectedTemplate: WorkoutTemplate?
-    @State private var showWorkout = false
 
     var body: some View {
         NavigationStack {
@@ -103,18 +102,16 @@ struct WorkoutTabView: View {
             }
             .background(Color(.systemGroupedBackground))
             .navigationTitle("DesiHITTE25")
-            .fullScreenCover(isPresented: $showWorkout) {
-                if let template = selectedTemplate {
-                    WorkoutView(
-                        template: template,
-                        bluetoothManager: bluetoothManager,
-                        voiceCoach: voiceCoach,
-                        youtubeManager: youtubeManager,
-                        hrRouter: hrRouter,
-                        maxHR: userProfile.maxHR,
-                        motivationFrequency: userProfile.motivationFrequency
-                    )
-                }
+            .fullScreenCover(item: $selectedTemplate) { template in
+                WorkoutView(
+                    template: template,
+                    bluetoothManager: bluetoothManager,
+                    voiceCoach: voiceCoach,
+                    youtubeManager: youtubeManager,
+                    hrRouter: hrRouter,
+                    maxHR: userProfile.maxHR,
+                    motivationFrequency: userProfile.motivationFrequency
+                )
             }
         }
     }
@@ -168,7 +165,6 @@ struct WorkoutTabView: View {
             ForEach(WorkoutTemplate.allTemplates) { template in
                 TemplateCard(template: template) {
                     selectedTemplate = template
-                    showWorkout = true
                 }
             }
         }
