@@ -198,7 +198,8 @@ class YouTubePlayerManager: ObservableObject {
         if !sessionPlanCategories.isEmpty {
             sessionPlan = MusicLibrary.planSession(
                 categories: sessionPlanCategories,
-                genre: genre
+                genre: genre,
+                blockedIDs: YouTubePlayabilityFilter.shared.currentBlockedIDs
             )
         }
     }
@@ -211,7 +212,11 @@ class YouTubePlayerManager: ObservableObject {
     func planSession(categories: [PlaylistCategory], genre: MusicGenre) {
         currentGenre = genre
         sessionPlanCategories = categories
-        sessionPlan = MusicLibrary.planSession(categories: categories, genre: genre)
+        sessionPlan = MusicLibrary.planSession(
+            categories: categories,
+            genre: genre,
+            blockedIDs: YouTubePlayabilityFilter.shared.currentBlockedIDs
+        )
     }
 
     func clearSessionPlan() {
@@ -228,12 +233,22 @@ class YouTubePlayerManager: ObservableObject {
         }
         let track = sessionPlan[intervalIndex]
         // Load the whole category playlist so ENDED wrap-around still works
-        // after the planned track finishes.
+        // after the planned track finishes. Filter out known-bad IDs so the
+        // wrap-around doesn't land on a video we already know is unplayable.
         let playlist = MusicLibrary.playlist(genre: currentGenre, category: fallbackCategory)
+        let filtered = YouTubePlayabilityFilter.shared.playableTracks(playlist.tracks)
+        // Always include the planned track itself even if the filter would
+        // exclude it — the runtime error handler will move on if it fails.
+        var tracks = filtered
+        if !tracks.contains(where: { $0.videoID == track.videoID }) {
+            tracks.insert(track, at: 0)
+        }
+        if tracks.isEmpty { tracks = playlist.tracks }
+
         currentCategory = fallbackCategory
-        currentPlaylist = playlist.videoIDs
-        currentPlaylistTracks = playlist.tracks
-        currentVideoIndex = playlist.videoIDs.firstIndex(of: track.videoID) ?? 0
+        currentPlaylist = tracks.map(\.videoID)
+        currentPlaylistTracks = tracks
+        currentVideoIndex = tracks.firstIndex(where: { $0.videoID == track.videoID }) ?? 0
         let idsString = currentPlaylist.joined(separator: ",")
         // Load the playlist context, then jump straight to the chosen track.
         webView?.evaluateJavaScript(
@@ -282,13 +297,18 @@ class YouTubePlayerManager: ObservableObject {
         currentCategory = category
         currentGenre = genre
         let playlist = MusicLibrary.playlist(genre: genre, category: category)
-        currentPlaylist = playlist.videoIDs
-        currentPlaylistTracks = playlist.tracks
+        // Filter to only playable tracks. If everything is blocklisted for
+        // this category (unlikely but possible after heavy churn), fall back
+        // to the full list — runtime auto-skip will still handle it.
+        let filtered = YouTubePlayabilityFilter.shared.playableTracks(playlist.tracks)
+        let tracks = filtered.isEmpty ? playlist.tracks : filtered
+        currentPlaylist = tracks.map(\.videoID)
+        currentPlaylistTracks = tracks
         currentVideoIndex = 0
         let idsString = currentPlaylist.joined(separator: ",")
         webView?.evaluateJavaScript("loadPlaylist('\(idsString)');", completionHandler: nil)
         DispatchQueue.main.async { [weak self] in
-            self?.currentTrack = playlist.tracks.first
+            self?.currentTrack = tracks.first
         }
     }
 
@@ -307,9 +327,15 @@ class YouTubePlayerManager: ObservableObject {
     }
 
     func handlePlayerError(_ code: String) {
-        // Log so it shows up in Xcode console; the JS side already auto-skips
-        // to the next track. Codes: 2=bad param, 5=html5, 100=not found,
-        // 101/150=embed disabled by owner.
-        print("[YouTubePlayer] error code=\(code) — auto-skipping to next track")
+        // Codes: 2=bad param, 5=html5, 100=not found, 101/150=embed disabled.
+        // Blocklist the currently-loaded track so future session plans and
+        // playlist loads exclude it. The JS side has already scheduled a
+        // skip to the next track.
+        let failedID = currentTrack?.videoID
+            ?? (currentVideoIndex < currentPlaylist.count ? currentPlaylist[currentVideoIndex] : nil)
+        print("[YouTubePlayer] error code=\(code) videoID=\(failedID ?? "?") — blocklisting and auto-skipping")
+        if let id = failedID {
+            YouTubePlayabilityFilter.shared.markBlocked(id)
+        }
     }
 }

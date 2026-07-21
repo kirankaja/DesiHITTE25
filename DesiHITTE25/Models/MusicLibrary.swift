@@ -207,14 +207,26 @@ enum MusicLibrary {
     /// avoiding immediate repeats and preferring tracks not yet used earlier
     /// in the session. Falls back to any repeat only if a category has fewer
     /// tracks than uses.
-    static func planSession(categories: [PlaylistCategory], genre: MusicGenre) -> [MusicTrack] {
+    ///
+    /// `blockedIDs` are excluded from selection when possible. If every
+    /// track in a category is blocklisted, we allow one blocked pick rather
+    /// than leaving the interval silent — the runtime auto-skip will move
+    /// past it and future sessions will keep learning.
+    static func planSession(categories: [PlaylistCategory],
+                            genre: MusicGenre,
+                            blockedIDs: Set<String> = []) -> [MusicTrack] {
         var used: Set<String> = []
         var lastVideoID: String?
         var plan: [MusicTrack] = []
 
         for category in categories {
-            let tracks = playlist(genre: genre, category: category).tracks
-            guard !tracks.isEmpty else { continue }
+            let allTracks = playlist(genre: genre, category: category).tracks
+            guard !allTracks.isEmpty else { continue }
+
+            // Prefer non-blocked tracks. Fall back to the full list only if
+            // every track in this category is blocklisted.
+            let playable = allTracks.filter { !blockedIDs.contains($0.videoID) }
+            let tracks = playable.isEmpty ? allTracks : playable
 
             let target = (category.bpmRange.lowerBound + category.bpmRange.upperBound) / 2
 

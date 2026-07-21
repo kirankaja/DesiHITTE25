@@ -34,6 +34,11 @@ struct DesiHITTE25App: App {
         let bt = BluetoothManager()
         _bluetoothManager = StateObject(wrappedValue: bt)
         _hrRouter = StateObject(wrappedValue: HeartRateRouter(bluetooth: bt))
+
+        // Warm the playability filter: probe any curated YouTube IDs we
+        // haven't checked yet against oEmbed to catch removed / embed-
+        // disabled videos before a workout even starts.
+        YouTubePlayabilityFilter.shared.probeLibraryInBackground()
     }
 
     var sharedModelContainer: ModelContainer = {
