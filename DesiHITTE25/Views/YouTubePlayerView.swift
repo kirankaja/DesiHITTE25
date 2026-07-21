@@ -13,6 +13,7 @@ struct YouTubePlayerView: UIViewRepresentable {
         contentController.add(context.coordinator, name: "playerReady")
         contentController.add(context.coordinator, name: "titleUpdate")
         contentController.add(context.coordinator, name: "stateChange")
+        contentController.add(context.coordinator, name: "playerError")
 
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.isOpaque = false
@@ -51,6 +52,8 @@ struct YouTubePlayerView: UIViewRepresentable {
                 manager.handleStateChange(body)
             case "playerReady":
                 break
+            case "playerError":
+                manager.handlePlayerError(body)
             default:
                 break
             }

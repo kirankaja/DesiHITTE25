@@ -57,6 +57,7 @@ class YouTubePlayerManager: ObservableObject {
                 var playerReady = false;
                 var pendingCommands = [];
                 var playlist = '\(playlistString)'.split(',');
+                var errorSkipCount = 0;
 
                 function runOrQueue(fn) {
                     if (playerReady && player) {
@@ -82,9 +83,20 @@ class YouTubePlayerManager: ObservableObject {
                         },
                         events: {
                             'onReady': onPlayerReady,
-                            'onStateChange': onPlayerStateChange
+                            'onStateChange': onPlayerStateChange,
+                            'onError': onPlayerError
                         }
                     });
+                }
+
+                function onPlayerError(event) {
+                    // 2 = bad param, 5 = html5 error, 100 = not found/private,
+                    // 101 / 150 = embed disabled by owner. Skip and try next.
+                    window.webkit.messageHandlers.playerError.postMessage(String(event.data));
+                    if (errorSkipCount < playlist.length) {
+                        errorSkipCount++;
+                        setTimeout(playNext, 200);
+                    }
                 }
 
                 function onPlayerReady(event) {
@@ -99,6 +111,9 @@ class YouTubePlayerManager: ObservableObject {
                 }
 
                 function onPlayerStateChange(event) {
+                    if (event.data == YT.PlayerState.PLAYING) {
+                        errorSkipCount = 0; // reset on successful play
+                    }
                     if (event.data == YT.PlayerState.ENDED) {
                         playNext();
                     }
@@ -130,12 +145,14 @@ class YouTubePlayerManager: ObservableObject {
 
                 function loadPlaylist(ids) {
                     playlist = ids.split(',');
+                    errorSkipCount = 0;
                     runOrQueue(function() {
                         if (playlist.length > 0) player.loadVideoById(playlist[0]);
                     });
                 }
 
                 function loadVideo(id) {
+                    errorSkipCount = 0;
                     runOrQueue(function() { player.loadVideoById(id); });
                 }
             </script>
@@ -287,5 +304,12 @@ class YouTubePlayerManager: ObservableObject {
         DispatchQueue.main.async { [weak self] in
             self?.isPlaying = (state == "playing")
         }
+    }
+
+    func handlePlayerError(_ code: String) {
+        // Log so it shows up in Xcode console; the JS side already auto-skips
+        // to the next track. Codes: 2=bad param, 5=html5, 100=not found,
+        // 101/150=embed disabled by owner.
+        print("[YouTubePlayer] error code=\(code) — auto-skipping to next track")
     }
 }
