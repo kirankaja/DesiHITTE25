@@ -54,7 +54,17 @@ class YouTubePlayerManager: ObservableObject {
                 firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
 
                 var player;
+                var playerReady = false;
+                var pendingCommands = [];
                 var playlist = '\(playlistString)'.split(',');
+
+                function runOrQueue(fn) {
+                    if (playerReady && player) {
+                        fn();
+                    } else {
+                        pendingCommands.push(fn);
+                    }
+                }
 
                 function onYouTubeIframeAPIReady() {
                     player = new YT.Player('player', {
@@ -68,7 +78,7 @@ class YouTubePlayerManager: ObservableObject {
                             'rel': 0,
                             'fs': 0,
                             'iv_load_policy': 3,
-                            'autoplay': 0
+                            'autoplay': 1
                         },
                         events: {
                             'onReady': onPlayerReady,
@@ -79,7 +89,13 @@ class YouTubePlayerManager: ObservableObject {
 
                 function onPlayerReady(event) {
                     event.target.setVolume(\(Int(musicVolume * 100)));
+                    playerReady = true;
                     window.webkit.messageHandlers.playerReady.postMessage('ready');
+                    // Drain any commands that arrived before the player was ready
+                    while (pendingCommands.length > 0) {
+                        var fn = pendingCommands.shift();
+                        try { fn(); } catch (e) {}
+                    }
                 }
 
                 function onPlayerStateChange(event) {
@@ -93,36 +109,34 @@ class YouTubePlayerManager: ObservableObject {
                 }
 
                 function playVideo() {
-                    if (player && player.playVideo) player.playVideo();
+                    runOrQueue(function() { player.playVideo(); });
                 }
 
                 function pauseVideo() {
-                    if (player && player.pauseVideo) player.pauseVideo();
+                    runOrQueue(function() { player.pauseVideo(); });
                 }
 
                 function playNext() {
-                    var currentIndex = playlist.indexOf(player.getVideoData().video_id);
-                    var nextIndex = (currentIndex + 1) % playlist.length;
-                    if (player && player.loadVideoById) {
+                    runOrQueue(function() {
+                        var currentIndex = playlist.indexOf(player.getVideoData().video_id);
+                        var nextIndex = (currentIndex + 1) % playlist.length;
                         player.loadVideoById(playlist[nextIndex]);
-                    }
+                    });
                 }
 
                 function setVolume(vol) {
-                    if (player && player.setVolume) player.setVolume(vol);
+                    runOrQueue(function() { player.setVolume(vol); });
                 }
 
                 function loadPlaylist(ids) {
                     playlist = ids.split(',');
-                    if (player && player.loadVideoById && playlist.length > 0) {
-                        player.loadVideoById(playlist[0]);
-                    }
+                    runOrQueue(function() {
+                        if (playlist.length > 0) player.loadVideoById(playlist[0]);
+                    });
                 }
 
                 function loadVideo(id) {
-                    if (player && player.loadVideoById) {
-                        player.loadVideoById(id);
-                    }
+                    runOrQueue(function() { player.loadVideoById(id); });
                 }
             </script>
         </body>

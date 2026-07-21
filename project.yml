@@ -20,11 +20,13 @@ targets:
     settings:
       base:
         INFOPLIST_FILE: DesiHITTE25/Info.plist
-        PRODUCT_BUNDLE_IDENTIFIER: com.desihitte25.app
+        PRODUCT_BUNDLE_IDENTIFIER: com.desihitte25.kirankaja
+        DEVELOPMENT_TEAM: "7HE2392X5K"
         SWIFT_VERSION: "5.9"
-        CODE_SIGN_STYLE: Manual
-        CODE_SIGNING_ALLOWED: "NO"
-        CODE_SIGNING_REQUIRED: "NO"
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_IDENTITY: "Apple Development"
+        CODE_SIGNING_ALLOWED: "YES"
+        CODE_SIGNING_REQUIRED: "YES"
         TARGETED_DEVICE_FAMILY: "1,2"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         GENERATE_INFOPLIST_FILE: "NO"

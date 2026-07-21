@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import AVFoundation
 
 @main
 struct DesiHITTE25App: App {
@@ -17,6 +18,19 @@ struct DesiHITTE25App: App {
     @StateObject private var hrRouter: HeartRateRouter
 
     init() {
+        // Configure the audio session for .playback BEFORE any WKWebView is
+        // created. Without this the YouTube iframe player uses the default
+        // SoloAmbient category, which honors the silent-mode switch and stops
+        // when the app backgrounds. .playback ignores the mute switch and
+        // keeps playing while screen-locked.
+        do {
+            let session = AVAudioSession.sharedInstance()
+            try session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
+            try session.setActive(true)
+        } catch {
+            print("DesiHITTE25App: audio session setup failed: \(error)")
+        }
+
         let bt = BluetoothManager()
         _bluetoothManager = StateObject(wrappedValue: bt)
         _hrRouter = StateObject(wrappedValue: HeartRateRouter(bluetooth: bt))
